@@ -122,10 +122,14 @@ export const Sidebar: React.FC = () => {
                 }`}
               >
                 <div className="flex items-center gap-2.5 truncate">
-                  <span
-                    className="w-2.5 h-2.5 rounded-full shrink-0"
-                    style={{ backgroundColor: cat.color }}
-                  />
+                  {cat.iconUrl ? (
+                    <img src={cat.iconUrl} alt={cat.shortLabel} className="w-4 h-4 object-contain shrink-0" />
+                  ) : (
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: cat.color }}
+                    />
+                  )}
                   <span className="truncate">{cat.label}</span>
                 </div>
                 <span className="text-[11px] text-slate-400">{count}</span>

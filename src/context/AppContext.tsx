@@ -274,11 +274,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  // Reset to initial demo data
+  // Reset to empty clean state
   const resetData = () => {
-    const sample = resetToInitialData();
-    setItems(sample);
-    showToast('Đã khôi phục dữ liệu mẫu thành công', 'success');
+    const clean = resetToInitialData();
+    setItems(clean);
+    showToast('Đã xóa dữ liệu và đưa về trạng thái mới', 'info');
   };
 
   return (

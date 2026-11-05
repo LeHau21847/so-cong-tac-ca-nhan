@@ -143,7 +143,7 @@ export const DashboardView: React.FC = () => {
             <span className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
               Đoàn Thanh Niên
             </span>
-            <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+            <img src="/assets/logo-doan.png" alt="Đoàn Thanh Niên" className="w-8 h-8 object-contain" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-extrabold text-blue-600 dark:text-blue-400">
@@ -166,7 +166,7 @@ export const DashboardView: React.FC = () => {
             <span className="text-xs font-bold uppercase tracking-wider text-red-600 dark:text-red-400">
               ANTT Cơ Sở
             </span>
-            <span className="w-2.5 h-2.5 rounded-full bg-red-600" />
+            <img src="/assets/logo-antt.png" alt="Bảo Vệ ANTT" className="w-8 h-8 object-contain" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-extrabold text-red-600 dark:text-red-400">

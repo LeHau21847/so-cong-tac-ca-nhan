@@ -4,7 +4,7 @@ import { DEFAULT_SETTINGS } from '../utils/constants';
 import { INITIAL_WORK_ITEMS } from './mockData';
 
 const STORAGE_KEYS = {
-  WORK_ITEMS: 'so_cong_tac_work_items_v1',
+  WORK_ITEMS: 'so_cong_tac_work_items_v2',
   SETTINGS: 'so_cong_tac_settings_v1',
   PENDING_SYNC: 'so_cong_tac_pending_sync_v1',
 };
@@ -33,10 +33,12 @@ export function saveStoredSettings(settings: AppSettings): void {
 
 export function getStoredWorkItems(): WorkItem[] {
   try {
+    // Clear legacy v1 sample data
+    localStorage.removeItem('so_cong_tac_work_items_v1');
     const raw = localStorage.getItem(STORAGE_KEYS.WORK_ITEMS);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed;
       }
     }
@@ -44,9 +46,8 @@ export function getStoredWorkItems(): WorkItem[] {
     console.error('Error reading work items from localStorage:', e);
   }
 
-  // First time initialization with mock data
-  saveStoredWorkItems(INITIAL_WORK_ITEMS);
-  return INITIAL_WORK_ITEMS;
+  saveStoredWorkItems([]);
+  return [];
 }
 
 export function saveStoredWorkItems(items: WorkItem[]): void {
@@ -57,10 +58,10 @@ export function saveStoredWorkItems(items: WorkItem[]): void {
   }
 }
 
-// Reset data to initial mock data
+// Reset data to empty clean state
 export function resetToInitialData(): WorkItem[] {
-  saveStoredWorkItems(INITIAL_WORK_ITEMS);
-  return INITIAL_WORK_ITEMS;
+  saveStoredWorkItems([]);
+  return [];
 }
 
 // Clear all data

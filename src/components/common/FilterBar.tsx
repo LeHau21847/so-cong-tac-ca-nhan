@@ -64,10 +64,14 @@ export const FilterBar: React.FC = () => {
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
               }`}
             >
-              <span
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: isSelected ? '#FFFFFF' : cat.color }}
-              />
+              {cat.iconUrl ? (
+                <img src={cat.iconUrl} alt={cat.shortLabel} className="w-3.5 h-3.5 object-contain shrink-0" />
+              ) : (
+                <span
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: isSelected ? '#FFFFFF' : cat.color }}
+                />
+              )}
               <span>{cat.shortLabel}</span>
             </button>
           );

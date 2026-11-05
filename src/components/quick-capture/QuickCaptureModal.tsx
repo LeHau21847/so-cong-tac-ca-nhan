@@ -270,10 +270,14 @@ export const QuickCaptureModal: React.FC = () => {
                         : 'bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
                     }`}
                   >
-                    <span
-                      className={`w-2 h-2 rounded-full ${isSelected ? 'bg-white' : ''}`}
-                      style={{ backgroundColor: isSelected ? '#FFFFFF' : cat.color }}
-                    />
+                    {cat.iconUrl ? (
+                      <img src={cat.iconUrl} alt={cat.shortLabel} className="w-5 h-5 object-contain shrink-0" />
+                    ) : (
+                      <span
+                        className={`w-2 h-2 rounded-full ${isSelected ? 'bg-white' : ''}`}
+                        style={{ backgroundColor: isSelected ? '#FFFFFF' : cat.color }}
+                      />
+                    )}
                     <span className="truncate">{cat.shortLabel}</span>
                   </button>
                 );

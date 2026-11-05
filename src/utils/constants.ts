@@ -13,6 +13,7 @@ export interface CategoryMeta {
   accentBg: string;
   driveFolder: string;
   description: string;
+  iconUrl?: string;
 }
 
 export const CATEGORIES: Record<Category, CategoryMeta> = {
@@ -28,6 +29,7 @@ export const CATEGORIES: Record<Category, CategoryMeta> = {
     accentBg: 'bg-blue-500 hover:bg-blue-600 text-white',
     driveFolder: '01_Doan_Thanh_Nien',
     description: 'Hoạt động phong trào, tình nguyện, sinh hoạt chi đoàn, phát triển thanh niên',
+    iconUrl: '/assets/logo-doan.png',
   },
   antt_co_so: {
     id: 'antt_co_so',
@@ -41,6 +43,7 @@ export const CATEGORIES: Record<Category, CategoryMeta> = {
     accentBg: 'bg-red-600 hover:bg-red-700 text-white',
     driveFolder: '02_ANTT_Co_So',
     description: 'Tuần tra kiểm soát, an ninh trật tự địa bàn, hòa giải cơ sở, phòng chống tội phạm',
+    iconUrl: '/assets/logo-antt.png',
   },
   cong_viec_khac: {
     id: 'cong_viec_khac',

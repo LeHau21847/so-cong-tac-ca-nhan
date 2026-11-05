@@ -21,16 +21,29 @@ export const CategoryBadge: React.FC<CategoryBadgeProps> = ({
     lg: 'text-sm px-3 py-1.5 font-semibold',
   };
 
+  const imgSizes = {
+    sm: 'w-3.5 h-3.5 mr-1.5',
+    md: 'w-4 h-4 mr-1.5',
+    lg: 'w-5 h-5 mr-2',
+  };
+
   return (
     <span
       className={`inline-flex items-center rounded-full border shadow-xs transition-colors ${meta.lightBg} ${sizeClasses[size]}`}
     >
-      <span
-        className="w-2 h-2 rounded-full mr-1.5 shrink-0"
-        style={{ backgroundColor: meta.color }}
-      />
+      {meta.iconUrl ? (
+        <img
+          src={meta.iconUrl}
+          alt={meta.shortLabel}
+          className={`${imgSizes[size]} object-contain shrink-0`}
+        />
+      ) : (
+        <span
+          className="w-2 h-2 rounded-full mr-1.5 shrink-0"
+          style={{ backgroundColor: meta.color }}
+        />
+      )}
       {meta.label}
     </span>
   );
 };
-

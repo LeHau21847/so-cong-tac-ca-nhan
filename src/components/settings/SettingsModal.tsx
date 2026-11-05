@@ -311,15 +311,15 @@ export const SettingsModal: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
-                  if (window.confirm('Khôi phục danh sách công việc về mẫu dữ liệu ban đầu?')) {
+                  if (window.confirm('Bạn có chắc chắn muốn xóa tất cả công việc và đưa về trạng thái trống ban đầu?')) {
                     resetData();
                     closeSettings();
                   }
                 }}
-                className="col-span-2 sm:col-span-1 py-2 px-3 rounded-xl border border-amber-300 dark:border-amber-800 text-xs font-semibold text-amber-700 dark:text-amber-300 bg-amber-50/50 dark:bg-amber-950/20 hover:bg-amber-100 flex items-center justify-center gap-1.5"
+                className="col-span-2 sm:col-span-1 py-2 px-3 rounded-xl border border-rose-300 dark:border-rose-800 text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50/50 dark:bg-rose-950/20 hover:bg-rose-100 flex items-center justify-center gap-1.5"
               >
-                <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
-                <span>Dữ liệu mẫu Demo</span>
+                <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
+                <span>Làm mới (Xóa hết)</span>
               </button>
             </div>
           </div>

@@ -198,13 +198,19 @@ export const ReportView: React.FC = () => {
 
       {/* Summary KPI Badges */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <div className="bg-blue-50 dark:bg-blue-950/40 p-3 rounded-xl border border-blue-200 dark:border-blue-900 text-blue-900 dark:text-blue-100">
-          <span className="text-[11px] font-bold uppercase">Đoàn Thanh Niên</span>
-          <p className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-0.5">{dtnItems.length} việc</p>
+        <div className="bg-blue-50 dark:bg-blue-950/40 p-3 rounded-xl border border-blue-200 dark:border-blue-900 text-blue-900 dark:text-blue-100 flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-bold uppercase">Đoàn Thanh Niên</span>
+            <p className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-0.5">{dtnItems.length} việc</p>
+          </div>
+          <img src="/assets/logo-doan.png" alt="Đoàn TN" className="w-8 h-8 object-contain" />
         </div>
-        <div className="bg-red-50 dark:bg-red-950/40 p-3 rounded-xl border border-red-200 dark:border-red-900 text-red-900 dark:text-red-100">
-          <span className="text-[11px] font-bold uppercase">ANTT Cơ Sở</span>
-          <p className="text-xl font-bold text-red-600 dark:text-red-400 mt-0.5">{anttItems.length} việc</p>
+        <div className="bg-red-50 dark:bg-red-950/40 p-3 rounded-xl border border-red-200 dark:border-red-900 text-red-900 dark:text-red-100 flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-bold uppercase">ANTT Cơ Sở</span>
+            <p className="text-xl font-bold text-red-600 dark:text-red-400 mt-0.5">{anttItems.length} việc</p>
+          </div>
+          <img src="/assets/logo-antt.png" alt="ANTT" className="w-8 h-8 object-contain" />
         </div>
         <div className="bg-purple-50 dark:bg-purple-950/40 p-3 rounded-xl border border-purple-200 dark:border-purple-900 text-purple-900 dark:text-purple-100">
           <span className="text-[11px] font-bold uppercase">Công Việc Khác</span>
@@ -252,7 +258,10 @@ export const ReportView: React.FC = () => {
         {/* Content Section I: Đoàn Thanh Niên */}
         <div className="font-sans space-y-3">
           <h2 className="text-sm sm:text-base font-bold text-blue-700 dark:text-blue-400 uppercase border-b-2 border-blue-500 pb-1 flex items-center justify-between">
-            <span>I. CÔNG TÁC ĐOÀN THANH NIÊN</span>
+            <span className="flex items-center gap-2">
+              <img src="/assets/logo-doan.png" alt="Đoàn TN" className="w-5 h-5 object-contain" />
+              <span>I. CÔNG TÁC ĐOÀN THANH NIÊN</span>
+            </span>
             <span className="text-xs font-normal text-slate-500">({dtnItems.length} nhiệm vụ)</span>
           </h2>
           {dtnItems.length === 0 ? (
@@ -303,7 +312,10 @@ export const ReportView: React.FC = () => {
         {/* Content Section II: ANTT Cơ Sở */}
         <div className="font-sans space-y-3">
           <h2 className="text-sm sm:text-base font-bold text-red-700 dark:text-red-400 uppercase border-b-2 border-red-500 pb-1 flex items-center justify-between">
-            <span>II. CÔNG TÁC AN NINH TRẬT TỰ CƠ SỞ</span>
+            <span className="flex items-center gap-2">
+              <img src="/assets/logo-antt.png" alt="ANTT" className="w-5 h-5 object-contain" />
+              <span>II. CÔNG TÁC AN NINH TRẬT TỰ CƠ SỞ</span>
+            </span>
             <span className="text-xs font-normal text-slate-500">({anttItems.length} nhiệm vụ)</span>
           </h2>
           {anttItems.length === 0 ? (

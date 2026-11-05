@@ -2,7 +2,6 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import {
-  BookOpen,
   Cloud,
   CloudOff,
   RefreshCw,
@@ -35,8 +34,13 @@ export const Navbar: React.FC = () => {
       <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-4">
         {/* Logo & Title */}
         <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-700 via-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
-            <BookOpen className="w-5 h-5" />
+          <div className="flex items-center -space-x-2 shrink-0">
+            <div className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 p-0.5 shadow-md border border-slate-200 dark:border-slate-700 z-10 flex items-center justify-center">
+              <img src="/assets/logo-doan.png" alt="Đoàn Thanh Niên" className="w-8 h-8 object-contain" />
+            </div>
+            <div className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 p-0.5 shadow-md border border-slate-200 dark:border-slate-700 flex items-center justify-center">
+              <img src="/assets/logo-antt.png" alt="Bảo Vệ ANTT Cơ Sở" className="w-8 h-8 object-contain" />
+            </div>
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -44,7 +48,7 @@ export const Navbar: React.FC = () => {
                 Sổ Công Tác
               </h1>
               <span className="hidden md:inline-flex text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">
-                PWA Mobile & Cloud
+                Đoàn TN • ANTT Cơ Sở
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block truncate max-w-[220px]">
