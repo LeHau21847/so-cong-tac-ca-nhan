@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0066FF"/>
+      <stop offset="100%" stop-color="#003D99"/>
+    </linearGradient>
+    <linearGradient id="badge" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#DC2626"/>
+      <stop offset="100%" stop-color="#991B1B"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="110" fill="url(#bg)"/>
+  
+  <!-- Book / Notebook outline -->
+  <rect x="110" y="90" width="292" height="332" rx="24" fill="#FFFFFF" opacity="0.95"/>
+  <rect x="110" y="90" width="45" height="332" rx="10" fill="#E2E8F0"/>
+  
+  <!-- Rings -->
+  <circle cx="132" cy="150" r="14" fill="#64748B"/>
+  <circle cx="132" cy="220" r="14" fill="#64748B"/>
+  <circle cx="132" cy="290" r="14" fill="#64748B"/>
+  <circle cx="132" cy="360" r="14" fill="#64748B"/>
+  
+  <!-- Lines in notebook -->
+  <rect x="180" y="145" width="180" height="18" rx="9" fill="#0066FF"/>
+  <rect x="180" y="195" width="190" height="14" rx="7" fill="#94A3B8"/>
+  <rect x="180" y="235" width="160" height="14" rx="7" fill="#94A3B8"/>
+  <rect x="180" y="275" width="185" height="14" rx="7" fill="#94A3B8"/>
+  
+  <!-- Red Star Badge (ANTT / Đoàn) -->
+  <circle cx="355" cy="355" r="75" fill="url(#badge)" stroke="#FFFFFF" stroke-width="8"/>
+  <polygon points="355,305 369,340 405,340 376,362 387,397 355,375 323,397 334,362 305,340 341,340" fill="#FFD700"/>
+</svg>
