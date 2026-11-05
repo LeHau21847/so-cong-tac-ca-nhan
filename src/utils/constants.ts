@@ -60,7 +60,7 @@ export const CATEGORIES: Record<Category, CategoryMeta> = {
 export const CATEGORY_LIST = Object.values(CATEGORIES);
 
 export const DEFAULT_SETTINGS = {
-  gasApiUrl: '',
+  gasApiUrl: 'https://script.google.com/macros/s/AKfycbzad_EbB8ZC3tQeJGJ2vpCZ6t5s4ybupZKJ5bsAhrtww1AQLNELU7mUZh8AFs_ZESAC/exec',
   userName: 'Cán Bộ Phụ Trách',
   userRole: 'Bí thư Đoàn / Phụ trách ANTT Cơ sở',
   unitName: 'UBND Xã/Phường - Công an Xã/Phường',
