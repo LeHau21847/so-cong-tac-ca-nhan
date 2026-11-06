@@ -37,9 +37,11 @@ function doGet(e) {
 
     if (action === "getItems") {
       var items = getAllWorkItems();
+      var deletedIds = getDeletedIdsFromSheet();
       return jsonResponse({
         success: true,
-        items: items
+        items: items,
+        deletedIds: deletedIds
       });
     }
 
@@ -95,6 +97,7 @@ function doPost(e) {
     // 3. Xóa 1 công việc
     if (action === "deleteItem") {
       deleteWorkItemById(data.id);
+      recordDeletedIdInSheet(data.id);
       return jsonResponse({
         success: true,
         id: data.id
@@ -187,9 +190,9 @@ function saveImageToDrive(base64Data, fileName, category, yearMonth) {
 }
 
 /**
- * Tìm hoặc khởi tạo Google Sheet Database
+ * Tìm hoặc khởi tạo Google Spreadsheet Database
  */
-function getDatabaseSheet() {
+function getDatabaseSpreadsheet() {
   var ss;
   try {
     ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -212,6 +215,14 @@ function getDatabaseSheet() {
     }
   }
 
+  return ss;
+}
+
+/**
+ * Lấy Sheet WorkItems
+ */
+function getDatabaseSheet() {
+  var ss = getDatabaseSpreadsheet();
   var sheet = ss.getSheetByName("WorkItems");
   if (!sheet) {
     sheet = ss.insertSheet("WorkItems");
@@ -236,6 +247,76 @@ function getDatabaseSheet() {
   }
 
   return sheet;
+}
+
+/**
+ * Lấy hoặc khởi tạo Sheet lưu các ID đã xóa để đồng bộ triệt để giữa các thiết bị
+ */
+function getDeletedItemsSheet() {
+  try {
+    var ss = getDatabaseSpreadsheet();
+    if (!ss) return null;
+
+    var sheet = ss.getSheetByName("DeletedItems");
+    if (!sheet) {
+      sheet = ss.insertSheet("DeletedItems");
+      sheet.appendRow(["id", "deletedAt"]);
+      sheet.getRange(1, 1, 1, 2).setFontWeight("bold").setBackground("#DC2626").setFontColor("#FFFFFF");
+      sheet.setFrozenRows(1);
+    }
+    return sheet;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Ghi nhận ID đã xóa vào Google Sheets
+ */
+function recordDeletedIdInSheet(id) {
+  if (!id) return;
+  try {
+    var sheet = getDeletedItemsSheet();
+    if (!sheet) return;
+
+    var lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (var i = 0; i < ids.length; i++) {
+        if (String(ids[i][0]) === String(id)) return;
+      }
+    }
+
+    sheet.appendRow([String(id), new Date().toISOString()]);
+
+    // Giữ tối đa 500 ID xóa gần nhất
+    if (lastRow > 500) {
+      sheet.deleteRows(2, lastRow - 500);
+    }
+  } catch (err) {}
+}
+
+/**
+ * Lấy danh sách ID đã bị xóa
+ */
+function getDeletedIdsFromSheet() {
+  try {
+    var sheet = getDeletedItemsSheet();
+    if (!sheet) return [];
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return [];
+
+    var values = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    var list = [];
+    for (var i = 0; i < values.length; i++) {
+      if (values[i][0]) {
+        list.push(String(values[i][0]));
+      }
+    }
+    return list;
+  } catch (e) {
+    return [];
+  }
 }
 
 /**

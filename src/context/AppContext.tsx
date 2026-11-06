@@ -147,14 +147,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (res.success && Array.isArray(res.items)) {
         const currentLocal = getStoredWorkItems();
         const deletedIds = getDeletedItemIds();
-        const { mergedItems, hasLocalChangesToUpload } = mergeWorkItems(currentLocal, res.items, deletedIds);
+
+        // 1. Thêm danh sách deletedIds từ Google Sheets vào tập hợp xóa
+        if (Array.isArray(res.deletedIds)) {
+          for (const dId of res.deletedIds) {
+            deletedIds.add(dId);
+            recordDeletedItemId(dId);
+          }
+        }
+
+        // 2. Thực hiện gộp dữ liệu 2 chiều thông minh
+        const { mergedItems, hasLocalChangesToUpload, newlyDeletedIds } = mergeWorkItems(
+          currentLocal,
+          res.items,
+          deletedIds
+        );
+
+        // 3. Ghi nhận các mục đã bị xóa từ thiết bị khác để vĩnh viễn không tải ngược lên
+        if (newlyDeletedIds && newlyDeletedIds.length > 0) {
+          for (const nId of newlyDeletedIds) {
+            recordDeletedItemId(nId);
+          }
+        }
 
         setItems(mergedItems);
         saveStoredWorkItems(mergedItems);
         setSyncStatus('online');
 
-        // Nếu máy này có công việc mới chưa có trên Cloud (ví dụ các việc đã nhập trên máy tính)
-        // -> Đẩy ngay danh sách đã gộp lên Google Sheets để điện thoại cũng nhận được
+        // 4. Nếu máy này có việc mới chưa có trên Cloud -> Đẩy lên Google Sheets
         if (hasLocalChangesToUpload) {
           console.log(`[Auto-Sync] Đang đồng bộ ${mergedItems.length} công việc lên Google Sheets...`);
           await batchSyncToGas(mergedItems, settings.gasApiUrl);
@@ -224,6 +244,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       id: 'work_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
       createdAt: now,
       updatedAt: now,
+      syncedWithCloud: false,
     };
 
     const newItems = [newItem, ...items];
@@ -235,6 +256,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setSyncStatus('syncing');
       try {
         await saveItemToGas(newItem, settings.gasApiUrl);
+        const syncedItems = newItems.map((it) =>
+          it.id === newItem.id ? { ...it, syncedWithCloud: true } : it
+        );
+        setItems(syncedItems);
+        saveStoredWorkItems(syncedItems);
         setSyncStatus('online');
       } catch (e) {
         console.warn('Sync failed, queued locally', e);
@@ -251,6 +277,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const updatedWithTime: WorkItem = {
       ...updatedItem,
       updatedAt: new Date().toISOString(),
+      syncedWithCloud: false,
     };
     const newItems = items.map((i) => (i.id === updatedItem.id ? updatedWithTime : i));
     setItems(newItems);
@@ -260,6 +287,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setSyncStatus('syncing');
       try {
         await saveItemToGas(updatedWithTime, settings.gasApiUrl);
+        const syncedItems = newItems.map((it) =>
+          it.id === updatedItem.id ? { ...it, syncedWithCloud: true } : it
+        );
+        setItems(syncedItems);
+        saveStoredWorkItems(syncedItems);
         setSyncStatus('online');
       } catch (e) {
         console.warn('Update sync failed', e);
@@ -269,7 +301,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     showToast('Đã cập nhật công việc', 'success');
   };
 
-  // Delete item
+  // Delete item: Xóa ở local, gửi lệnh xóa lên Cloud và đẩy danh sách sạch lên Google Sheets
   const deleteItem = async (id: string) => {
     recordDeletedItemId(id);
     const newItems = items.filter((i) => i.id !== id);
@@ -277,10 +309,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     saveStoredWorkItems(newItems);
 
     if (settings.gasApiUrl) {
+      setSyncStatus('syncing');
       try {
         await deleteItemFromGas(id, settings.gasApiUrl);
+        // Đồng bộ danh sách còn lại lên Google Sheets để đảm bảo triệt để
+        await batchSyncToGas(newItems, settings.gasApiUrl);
+        setSyncStatus('online');
       } catch (e) {
         console.warn('Delete sync failed', e);
+        setSyncStatus('online');
       }
     }
     showToast('Đã xóa công việc', 'info');

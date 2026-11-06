@@ -30,6 +30,7 @@ export interface WorkItem {
   isHighlighted: boolean; // Đánh dấu sao "Công việc tiêu biểu / Thành tích nổi bật"
   createdAt: string;
   updatedAt: string;
+  syncedWithCloud?: boolean; // Cờ nhận diện bản ghi đã từng đồng bộ lên Cloud
 }
 
 export type TimeCycle = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'custom' | 'all';

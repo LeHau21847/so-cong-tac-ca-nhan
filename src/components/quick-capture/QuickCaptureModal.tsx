@@ -26,6 +26,7 @@ export const QuickCaptureModal: React.FC = () => {
     closeQuickCapture,
     quickCaptureInitialData,
     addItem,
+    updateItem,
     settings,
     showToast,
   } = useApp();
@@ -202,18 +203,38 @@ export const QuickCaptureModal: React.FC = () => {
         finalImages = uploadedImages;
       }
 
-      await addItem({
-        title: finalTitle,
-        category,
-        type,
-        status: type === 'completed_log' ? 'done' : 'todo',
-        date,
-        time,
-        location,
-        description,
-        images: finalImages,
-        isHighlighted,
-      });
+      const isEditing = Boolean(quickCaptureInitialData && quickCaptureInitialData.id);
+
+      if (isEditing && quickCaptureInitialData?.id) {
+        await updateItem({
+          ...quickCaptureInitialData,
+          id: quickCaptureInitialData.id,
+          title: finalTitle,
+          category,
+          type,
+          status: type === 'completed_log' ? 'done' : (quickCaptureInitialData.status || 'todo'),
+          date,
+          time,
+          location,
+          description,
+          images: finalImages,
+          isHighlighted,
+          updatedAt: new Date().toISOString(),
+        } as any);
+      } else {
+        await addItem({
+          title: finalTitle,
+          category,
+          type,
+          status: type === 'completed_log' ? 'done' : 'todo',
+          date,
+          time,
+          location,
+          description,
+          images: finalImages,
+          isHighlighted,
+        });
+      }
 
       closeQuickCapture();
     } catch (err: any) {
@@ -222,6 +243,8 @@ export const QuickCaptureModal: React.FC = () => {
       setIsSubmitting(false);
     }
   };
+
+  const isEditing = Boolean(quickCaptureInitialData && quickCaptureInitialData.id);
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -234,10 +257,12 @@ export const QuickCaptureModal: React.FC = () => {
             </div>
             <div>
               <h3 className="font-bold text-base sm:text-lg text-slate-900 dark:text-white">
-                Chụp Nhanh Hiện Trường & Ghi Việc
+                {isEditing ? 'Chỉnh Sửa Công Việc / Lịch Họp' : 'Chụp Nhanh Hiện Trường & Ghi Việc'}
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Lưu vào Sổ công tác và sao lưu Google Drive 5TB
+                {isEditing
+                  ? 'Cập nhật nội dung chi tiết và đồng bộ Google Sheets / Drive'
+                  : 'Lưu vào Sổ công tác và sao lưu Google Drive 5TB'}
               </p>
             </div>
           </div>
@@ -552,7 +577,7 @@ export const QuickCaptureModal: React.FC = () => {
             ) : (
               <>
                 <CheckCircle className="w-4 h-4" />
-                <span>Lưu vào Sổ Công Tác</span>
+                <span>{isEditing ? 'Lưu Thay Đổi' : 'Lưu vào Sổ Công Tác'}</span>
               </>
             )}
           </button>

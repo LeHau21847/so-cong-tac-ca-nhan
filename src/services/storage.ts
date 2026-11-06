@@ -75,9 +75,11 @@ export function saveStoredWorkItems(items: WorkItem[]): void {
  * Thuật toán Hợp nhất 2 chiều thông minh (Bidirectional Merge)
  * Đảm bảo:
  * - Không mất bất kỳ dữ liệu nào dù ở máy tính hay điện thoại
- * - Nếu máy tính có việc chưa có trên Google Sheets -> giữ lại và đẩy lên Sheets
- * - Nếu điện thoại kéo từ Google Sheets về -> nhận được toàn bộ dữ liệu máy tính vừa đẩy
- * - Nếu cùng 1 việc được sửa trên cả 2 máy -> lấy bản ghi có thời gian updatedAt mới nhất
+ * - Tự động xóa sạch các mục đã bị xóa trên thiết bị khác:
+ *   + Dựa vào danh sách deletedIds từ server và local
+ *   + Dựa vào cờ syncedWithCloud: Nếu một mục đã từng lên Cloud mà Cloud không còn nữa -> mục đó đã bị xóa trên máy khác!
+ * - Không tạo bản sao duplicate: Cùng 1 ID luôn chỉ có 1 bản ghi duy nhất
+ * - Hỗ trợ hoạt động offline: Các mục tạo mới khi chưa có mạng (syncedWithCloud !== true) luôn được bảo toàn và đẩy lên Cloud khi online
  */
 export function mergeWorkItems(
   localItems: WorkItem[],
@@ -86,25 +88,45 @@ export function mergeWorkItems(
 ): {
   mergedItems: WorkItem[];
   hasLocalChangesToUpload: boolean;
+  newlyDeletedIds: string[];
 } {
   const itemMap = new Map<string, WorkItem>();
+  const newlyDeletedIds: string[] = [];
   let hasLocalChangesToUpload = false;
 
   // 1. Đưa tất cả cloudItems vào Map (bỏ qua nếu ID nằm trong danh sách đã xóa)
   for (const cItem of cloudItems) {
-    if (cItem && cItem.id && !deletedIds.has(cItem.id)) {
-      itemMap.set(cItem.id, cItem);
+    if (cItem && cItem.id) {
+      if (!deletedIds.has(cItem.id)) {
+        itemMap.set(cItem.id, { ...cItem, syncedWithCloud: true });
+      }
     }
   }
 
-  // 2. So sánh và gộp với localItems
+  // 2. So sánh và xử lý localItems
   for (const lItem of localItems) {
-    if (!lItem || !lItem.id || deletedIds.has(lItem.id)) continue;
+    if (!lItem || !lItem.id) continue;
+
+    // Nếu ID nằm trong danh sách đã xóa -> Bỏ qua ngay
+    if (deletedIds.has(lItem.id)) {
+      continue;
+    }
 
     if (!itemMap.has(lItem.id)) {
-      // Có ở thiết bị nhưng chưa có trên Cloud -> GIỮ LẠI VÀ ĐẨY LÊN CLOUD
-      itemMap.set(lItem.id, lItem);
-      hasLocalChangesToUpload = true;
+      // Bản ghi này có ở local nhưng KHÔNG CÓ TRÊN CLOUD
+      // Ta kiểm tra xem bản ghi này là việc TẠO MỚI OFFLINE hay ĐÃ BỊ MÁY KHÁC XÓA:
+      if (lItem.syncedWithCloud === true) {
+        // Bản ghi này TRƯỚC ĐÓ ĐÃ TỪNG LÊN CLOUD, nhưng hiện tại Cloud KHÔNG CÒN!
+        // -> Điều này chứng minh thiết bị khác (ví dụ: máy tính) đã XÓA nó!
+        // -> PHẢI XÓA KHỎI THIẾT BỊ NÀY, không được tải ngược lên Cloud!
+        newlyDeletedIds.push(lItem.id);
+        continue;
+      } else {
+        // Bản ghi này CHƯA TỪNG LÊN CLOUD (được tạo mới trên máy này khi chưa đồng bộ)
+        // -> Giữ lại và đánh dấu cần đẩy lên Cloud!
+        itemMap.set(lItem.id, lItem);
+        hasLocalChangesToUpload = true;
+      }
     } else {
       // Có ở cả 2 nơi: Chọn bản ghi có thời gian mới hơn
       const cItem = itemMap.get(lItem.id)!;
@@ -112,10 +134,11 @@ export function mergeWorkItems(
       const cloudTime = new Date(cItem.updatedAt || cItem.createdAt || 0).getTime();
 
       if (localTime > cloudTime) {
+        // Local mới hơn (vừa chỉnh sửa trên máy này) -> giữ local và cần đẩy lên Cloud
         itemMap.set(lItem.id, lItem);
         hasLocalChangesToUpload = true;
       } else {
-        // Giữ cloud item, nhưng nếu local có base64 cho ảnh mà cloud không có thì giữ lại base64 để offline xem nét
+        // Cloud mới hơn hoặc bằng -> Giữ cloud item, nhưng nếu local có base64 cho ảnh mà cloud không có thì giữ lại base64 để offline xem nét
         if (lItem.images && lItem.images.length > 0) {
           const mergedImages = (cItem.images || []).map((cImg) => {
             const matchedLocalImg = lItem.images.find(
@@ -126,7 +149,7 @@ export function mergeWorkItems(
             }
             return cImg;
           });
-          itemMap.set(lItem.id, { ...cItem, images: mergedImages });
+          itemMap.set(lItem.id, { ...cItem, images: mergedImages, syncedWithCloud: true });
         }
       }
     }
@@ -139,7 +162,7 @@ export function mergeWorkItems(
     return timeB - timeA;
   });
 
-  return { mergedItems: merged, hasLocalChangesToUpload };
+  return { mergedItems: merged, hasLocalChangesToUpload, newlyDeletedIds };
 }
 
 // Reset data to empty clean state
@@ -265,15 +288,34 @@ export function cleanItemForCloud(item: WorkItem): any {
 }
 
 /**
+ * Hàm gọi fetch có giới hạn thời gian (Timeout), tối ưu cho mạng di động 4G/5G
+ */
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 15000): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(id);
+  }
+}
+
+/**
  * Fetch all items from Google Apps Script
  */
-export async function fetchItemsFromGas(gasUrl: string): Promise<{ success: boolean; items?: WorkItem[]; error?: string }> {
+export async function fetchItemsFromGas(
+  gasUrl: string
+): Promise<{ success: boolean; items?: WorkItem[]; deletedIds?: string[]; error?: string }> {
   try {
     const url = gasUrl.includes('?') ? `${gasUrl}&action=getItems` : `${gasUrl}?action=getItems`;
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: 'GET',
       mode: 'cors',
-    });
+    }, 15000);
+
     if (!response.ok) {
       throw new Error(`Lỗi HTTP ${response.status}`);
     }
@@ -302,14 +344,18 @@ export async function fetchItemsFromGas(gasUrl: string): Promise<{ success: bool
           isHighlighted: Boolean(it.isHighlighted),
           createdAt: it.createdAt || new Date().toISOString(),
           updatedAt: it.updatedAt || new Date().toISOString(),
+          syncedWithCloud: true, // Đánh dấu bản ghi đã nằm trên Cloud
         };
       });
 
-      return { success: true, items: cleanedItems };
+      const deletedIds = Array.isArray(data.deletedIds) ? data.deletedIds.map(String) : [];
+
+      return { success: true, items: cleanedItems, deletedIds };
     }
     return { success: false, error: data.error || 'Dữ liệu không hợp lệ từ Google Sheets' };
   } catch (err: any) {
-    return { success: false, error: err.message || 'Không thể tải dữ liệu từ Google Sheets' };
+    const msg = err.name === 'AbortError' ? 'Hết thời gian chờ kết nối (15 giây)' : (err.message || 'Không thể tải dữ liệu từ Google Sheets');
+    return { success: false, error: msg };
   }
 }
 
@@ -321,7 +367,7 @@ export async function saveItemToGas(item: WorkItem, gasUrl: string): Promise<{ s
 
   try {
     const sanitized = cleanItemForCloud(item);
-    await fetch(gasUrl, {
+    await fetchWithTimeout(gasUrl, {
       method: 'POST',
       mode: 'no-cors',
       headers: {
@@ -331,7 +377,7 @@ export async function saveItemToGas(item: WorkItem, gasUrl: string): Promise<{ s
         action: 'saveItem',
         item: sanitized,
       }),
-    });
+    }, 15000);
     return { success: true };
   } catch (err: any) {
     console.error('Lỗi khi lưu item lên Google Sheets:', err);
@@ -347,7 +393,7 @@ export async function batchSyncToGas(items: WorkItem[], gasUrl: string): Promise
 
   try {
     const sanitizedList = items.map(cleanItemForCloud);
-    await fetch(gasUrl, {
+    await fetchWithTimeout(gasUrl, {
       method: 'POST',
       mode: 'no-cors',
       headers: {
@@ -357,7 +403,7 @@ export async function batchSyncToGas(items: WorkItem[], gasUrl: string): Promise
         action: 'batchSync',
         items: sanitizedList,
       }),
-    });
+    }, 20000);
     return { success: true };
   } catch (err: any) {
     console.error('Lỗi khi đồng bộ hàng loạt lên Google Sheets:', err);
@@ -372,7 +418,7 @@ export async function deleteItemFromGas(id: string, gasUrl: string): Promise<{ s
   if (!gasUrl) return { success: false, error: 'Chưa cấu hình Google Apps Script' };
 
   try {
-    await fetch(gasUrl, {
+    await fetchWithTimeout(gasUrl, {
       method: 'POST',
       mode: 'no-cors',
       headers: {
@@ -380,9 +426,9 @@ export async function deleteItemFromGas(id: string, gasUrl: string): Promise<{ s
       },
       body: JSON.stringify({
         action: 'deleteItem',
-        id,
+        id: String(id),
       }),
-    });
+    }, 15000);
     return { success: true };
   } catch (err: any) {
     console.error('Lỗi khi xóa item trên Google Sheets:', err);
