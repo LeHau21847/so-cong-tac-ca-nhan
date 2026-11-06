@@ -56,6 +56,9 @@ export const ReportView: React.FC = () => {
         if (it.images && it.images.length > 0) {
           text += `     - Minh chứng ảnh: ${it.images.length} ảnh (${it.images.map(img => img.url).join(', ')})\n`;
         }
+        if (it.attachments && it.attachments.length > 0) {
+          text += `     - Tệp văn bản đính kèm: ${it.attachments.map(att => att.name + (att.url ? ' [' + att.url + ']' : '')).join(', ')}\n`;
+        }
       });
       text += `\n`;
     }
@@ -72,6 +75,9 @@ export const ReportView: React.FC = () => {
         if (it.images && it.images.length > 0) {
           text += `     - Minh chứng ảnh: ${it.images.length} ảnh (${it.images.map(img => img.url).join(', ')})\n`;
         }
+        if (it.attachments && it.attachments.length > 0) {
+          text += `     - Tệp văn bản đính kèm: ${it.attachments.map(att => att.name + (att.url ? ' [' + att.url + ']' : '')).join(', ')}\n`;
+        }
       });
       text += `\n`;
     }
@@ -85,6 +91,12 @@ export const ReportView: React.FC = () => {
         text += `  ${idx + 1}. [${formatVNDate(it.date)}] ${it.title}${it.isHighlighted ? ' [⭐ TIÊU BIỂU]' : ''}\n`;
         if (it.location) text += `     - Địa điểm: ${it.location}\n`;
         if (it.description) text += `     - Nội dung / Kết quả: ${it.description}\n`;
+        if (it.images && it.images.length > 0) {
+          text += `     - Minh chứng ảnh: ${it.images.length} ảnh (${it.images.map(img => img.url).join(', ')})\n`;
+        }
+        if (it.attachments && it.attachments.length > 0) {
+          text += `     - Tệp văn bản đính kèm: ${it.attachments.map(att => att.name + (att.url ? ' [' + att.url + ']' : '')).join(', ')}\n`;
+        }
       });
       text += `\n`;
     }

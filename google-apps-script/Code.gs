@@ -85,6 +85,21 @@ function doPost(e) {
       });
     }
 
+    // 1b. Upload tệp văn bản / tài liệu bất kỳ lên Google Drive
+    if (action === "uploadFile" || action === "uploadDocument") {
+      var fileResult = saveFileToDrive(
+        data.base64,
+        data.fileName || "document_" + new Date().getTime(),
+        data.category || "cong_viec_khac",
+        data.yearMonth || Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM"),
+        data.mimeType
+      );
+      return jsonResponse({
+        success: true,
+        data: fileResult
+      });
+    }
+
     // 2. Lưu hoặc Cập nhật 1 công việc
     if (action === "saveItem") {
       var saved = saveOrUpdateWorkItem(data.item);
@@ -190,6 +205,62 @@ function saveImageToDrive(base64Data, fileName, category, yearMonth) {
 }
 
 /**
+ * Tự động tạo cây thư mục trên Google Drive và lưu tệp văn bản / tài liệu
+ * Hỗ trợ PDF, Word (.doc, .docx), Excel (.xls, .xlsx), PowerPoint (.ppt, .pptx), Text...
+ */
+function saveFileToDrive(base64Data, fileName, category, yearMonth, customMimeType) {
+  var rootFolders = DriveApp.getFoldersByName(CONFIG.ROOT_FOLDER_NAME);
+  var rootFolder = rootFolders.hasNext() ? rootFolders.next() : DriveApp.createFolder(CONFIG.ROOT_FOLDER_NAME);
+
+  var subFolderName = CONFIG.CATEGORY_FOLDERS[category] || CONFIG.CATEGORY_FOLDERS["cong_viec_khac"];
+  var catFolder = getOrCreateFolder(rootFolder, subFolderName);
+  var ymFolder = getOrCreateFolder(catFolder, yearMonth);
+
+  var cleanBase64 = base64Data;
+  var mimeType = customMimeType || "application/octet-stream";
+  if (base64Data.indexOf(";base64,") !== -1) {
+    var parts = base64Data.split(";base64,");
+    mimeType = parts[0].replace("data:", "");
+    cleanBase64 = parts[1];
+  }
+
+  // Tự động nhận diện mimeType dựa trên phần mở rộng nếu chưa xác định
+  if (!mimeType || mimeType === "application/octet-stream") {
+    var ext = (fileName || "").split(".").pop().toLowerCase();
+    if (ext === "pdf") mimeType = "application/pdf";
+    else if (ext === "docx") mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    else if (ext === "doc") mimeType = "application/msword";
+    else if (ext === "xlsx") mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    else if (ext === "xls") mimeType = "application/vnd.ms-excel";
+    else if (ext === "pptx") mimeType = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+    else if (ext === "txt") mimeType = "text/plain";
+  }
+
+  var decodedBytes = Utilities.base64Decode(cleanBase64);
+  var blob = Utilities.newBlob(decodedBytes, mimeType, fileName);
+  var file = ymFolder.createFile(blob);
+
+  // Cấp quyền xem cho người có liên kết
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+  var fileId = file.getId();
+  var directUrl = "https://drive.google.com/file/d/" + fileId + "/view";
+  var downloadUrl = "https://drive.google.com/uc?export=download&id=" + fileId;
+
+  return {
+    id: fileId,
+    fileId: fileId,
+    url: directUrl,
+    viewUrl: file.getUrl(),
+    downloadUrl: downloadUrl,
+    name: fileName,
+    size: file.getSize(),
+    mimeType: mimeType,
+    folderPath: CONFIG.ROOT_FOLDER_NAME + "/" + subFolderName + "/" + yearMonth
+  };
+}
+
+/**
  * Tìm hoặc khởi tạo Google Spreadsheet Database
  */
 function getDatabaseSpreadsheet() {
@@ -224,26 +295,31 @@ function getDatabaseSpreadsheet() {
 function getDatabaseSheet() {
   var ss = getDatabaseSpreadsheet();
   var sheet = ss.getSheetByName("WorkItems");
+  var headers = [
+    "id",
+    "title",
+    "category",
+    "type",
+    "status",
+    "date",
+    "time",
+    "location",
+    "description",
+    "imagesJson",
+    "isHighlighted",
+    "createdAt",
+    "updatedAt",
+    "attachmentsJson"
+  ];
+
   if (!sheet) {
     sheet = ss.insertSheet("WorkItems");
-    var headers = [
-      "id",
-      "title",
-      "category",
-      "type",
-      "status",
-      "date",
-      "time",
-      "location",
-      "description",
-      "imagesJson",
-      "isHighlighted",
-      "createdAt",
-      "updatedAt"
-    ];
     sheet.appendRow(headers);
     sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#0066FF").setFontColor("#FFFFFF");
     sheet.setFrozenRows(1);
+  } else if (sheet.getLastColumn() < 14) {
+    // Tự động nâng cấp thêm cột attachmentsJson nếu bảng tính cũ chỉ có 13 cột
+    sheet.getRange(1, 14).setValue("attachmentsJson").setFontWeight("bold").setBackground("#0066FF").setFontColor("#FFFFFF");
   }
 
   return sheet;
@@ -337,6 +413,24 @@ function sanitizeImages(images) {
 }
 
 /**
+ * Loại bỏ chuỗi base64 khỏi tệp văn bản / tài liệu trước khi lưu vào Google Sheets
+ */
+function sanitizeAttachments(attachments) {
+  if (!attachments || !Array.isArray(attachments)) return [];
+  return attachments.map(function(att) {
+    return {
+      id: att.id,
+      name: att.name || "Tệp tài liệu",
+      size: Number(att.size) || 0,
+      type: att.type || "document",
+      url: att.url || "",
+      driveFileId: att.driveFileId || "",
+      createdAt: att.createdAt || new Date().toISOString()
+    };
+  });
+}
+
+/**
  * Lấy toàn bộ danh sách công việc
  */
 function getAllWorkItems() {
@@ -344,7 +438,8 @@ function getAllWorkItems() {
   var lastRow = sheet.getLastRow();
   if (lastRow <= 1) return [];
 
-  var values = sheet.getRange(2, 1, lastRow - 1, 13).getValues();
+  var numCols = Math.max(14, sheet.getLastColumn());
+  var values = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
   var items = [];
 
   for (var i = 0; i < values.length; i++) {
@@ -360,6 +455,15 @@ function getAllWorkItems() {
       images = [];
     }
 
+    var attachments = [];
+    try {
+      if (row[13]) {
+        attachments = JSON.parse(row[13]);
+      }
+    } catch (e) {
+      attachments = [];
+    }
+
     items.push({
       id: String(row[0]),
       title: String(row[1] || ""),
@@ -371,6 +475,7 @@ function getAllWorkItems() {
       location: String(row[7] || ""),
       description: String(row[8] || ""),
       images: sanitizeImages(images),
+      attachments: sanitizeAttachments(attachments),
       isHighlighted: Boolean(row[10]),
       createdAt: String(row[11] || ""),
       updatedAt: String(row[12] || "")
@@ -440,7 +545,8 @@ function saveOrUpdateWorkItem(item) {
     JSON.stringify(sanitizeImages(item.images || [])),
     item.isHighlighted ? true : false,
     item.createdAt || new Date().toISOString(),
-    item.updatedAt || new Date().toISOString()
+    item.updatedAt || new Date().toISOString(),
+    JSON.stringify(sanitizeAttachments(item.attachments || []))
   ];
 
   if (rowIndex > 0) {
@@ -495,7 +601,8 @@ function syncAllItems(items) {
     "imagesJson",
     "isHighlighted",
     "createdAt",
-    "updatedAt"
+    "updatedAt",
+    "attachmentsJson"
   ];
   sheet.appendRow(headers);
   sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#0066FF").setFontColor("#FFFFFF");
@@ -519,7 +626,8 @@ function syncAllItems(items) {
       JSON.stringify(sanitizeImages(it.images || [])),
       it.isHighlighted ? true : false,
       it.createdAt || new Date().toISOString(),
-      it.updatedAt || new Date().toISOString()
+      it.updatedAt || new Date().toISOString(),
+      JSON.stringify(sanitizeAttachments(it.attachments || []))
     ]);
   }
 

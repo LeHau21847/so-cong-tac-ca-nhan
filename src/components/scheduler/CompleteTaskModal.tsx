@@ -1,9 +1,10 @@
 // src/components/scheduler/CompleteTaskModal.tsx
 import React, { useState, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
-import { WorkItem, WorkImage } from '../../types';
+import { WorkItem, WorkImage, WorkAttachment } from '../../types';
 import { compressImage, CompressedImageResult } from '../../utils/imageCompressor';
-import { uploadImageToDrive } from '../../services/storage';
+import { uploadImageToDrive, uploadFileToDrive } from '../../services/storage';
+import { formatFileSize, getFileTypeInfo, readFileAsBase64 } from '../../utils/fileHelpers';
 import {
   CheckCircle2,
   Camera,
@@ -11,6 +12,7 @@ import {
   X,
   Trash2,
   Loader2,
+  Paperclip,
 } from 'lucide-react';
 
 interface CompleteTaskModalProps {
@@ -23,11 +25,13 @@ export const CompleteTaskModal: React.FC<CompleteTaskModalProps> = ({ item, onCl
 
   const [resultNotes, setResultNotes] = useState('');
   const [images, setImages] = useState<WorkImage[]>([]);
+  const [attachments, setAttachments] = useState<WorkAttachment[]>([]);
   const [isCompressing, setIsCompressing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!item) return null;
 
@@ -63,17 +67,52 @@ export const CompleteTaskModal: React.FC<CompleteTaskModalProps> = ({ item, onCl
     setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handleDocumentsSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const newDocs: WorkAttachment[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.size > 25 * 1024 * 1024) {
+        showToast(`Tệp "${file.name}" vượt quá 25MB`, 'error');
+        continue;
+      }
+      try {
+        const base64 = await readFileAsBase64(file);
+        newDocs.push({
+          id: 'doc_' + Date.now() + '_' + i,
+          name: file.name,
+          size: file.size,
+          type: file.name.split('.').pop()?.toLowerCase() || 'document',
+          url: '',
+          base64,
+          createdAt: new Date().toISOString(),
+        });
+      } catch (err: any) {
+        showToast('Lỗi đọc tệp: ' + err.message, 'error');
+      }
+    }
+    setAttachments((prev) => [...prev, ...newDocs]);
+    e.target.value = '';
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     try {
       let finalImages = [...images];
+      let finalAttachments = [...attachments];
+      const yearMonth = item.date ? item.date.substring(0, 7) : new Date().toISOString().substring(0, 7);
 
       // Upload to Google Drive if configured
       if (settings.gasApiUrl && images.some((img) => img.base64)) {
         showToast('Đang tải ảnh minh chứng lên Google Drive...', 'info');
-        const yearMonth = item.date ? item.date.substring(0, 7) : new Date().toISOString().substring(0, 7);
 
         const uploadedImages = await Promise.all(
           images.map(async (img, idx) => {
@@ -103,7 +142,40 @@ export const CompleteTaskModal: React.FC<CompleteTaskModalProps> = ({ item, onCl
         finalImages = uploadedImages;
       }
 
-      await completeScheduledItem(item.id, resultNotes, finalImages);
+      // Upload documents to Google Drive
+      if (settings.gasApiUrl && attachments.some((att) => att.base64)) {
+        showToast('Đang tải tệp văn bản lên Google Drive...', 'info');
+
+        const uploadedAttachments = await Promise.all(
+          attachments.map(async (att) => {
+            if (att.base64) {
+              try {
+                const uploadRes = await uploadFileToDrive(
+                  att.base64,
+                  att.name,
+                  item.category,
+                  yearMonth,
+                  settings.gasApiUrl
+                );
+                if (uploadRes.success && uploadRes.fileData) {
+                  return {
+                    ...att,
+                    url: uploadRes.fileData.url || uploadRes.fileData.viewUrl || '',
+                    driveFileId: uploadRes.fileData.fileId,
+                    size: uploadRes.fileData.size || att.size,
+                  };
+                }
+              } catch (upErr) {
+                console.warn('Document upload error:', upErr);
+              }
+            }
+            return att;
+          })
+        );
+        finalAttachments = uploadedAttachments;
+      }
+
+      await completeScheduledItem(item.id, resultNotes, finalImages, finalAttachments);
       onClose();
     } catch (err: any) {
       showToast('Lỗi cập nhật hoàn thành: ' + err.message, 'error');
@@ -230,6 +302,68 @@ export const CompleteTaskModal: React.FC<CompleteTaskModalProps> = ({ item, onCl
                     </button>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* ĐÍNH KÈM TỆP VĂN BẢN / BIÊN BẢN */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Paperclip className="w-3.5 h-3.5 text-blue-500" />
+                <span>Đính kèm tệp văn bản / biên bản ({attachments.length})</span>
+              </label>
+              <span className="text-[10px] text-slate-400">PDF, Word, Excel...</span>
+            </div>
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt"
+              multiple
+              onChange={handleDocumentsSelected}
+              className="hidden"
+            />
+
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full py-2 px-3 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-slate-100"
+            >
+              <Paperclip className="w-3.5 h-3.5 text-blue-600" />
+              <span>Thêm văn bản kết luận / báo cáo</span>
+            </button>
+
+            {attachments.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                {attachments.map((att, idx) => {
+                  const typeInfo = getFileTypeInfo(att.name);
+                  return (
+                    <div
+                      key={att.id || idx}
+                      className="flex items-center justify-between p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${typeInfo.badgeBg} ${typeInfo.badgeText}`}>
+                          {typeInfo.label}
+                        </span>
+                        <span className="text-xs text-slate-800 dark:text-slate-200 truncate font-medium">
+                          {att.name}
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          ({formatFileSize(att.size)})
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(idx)}
+                        className="text-slate-400 hover:text-rose-600 p-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

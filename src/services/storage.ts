@@ -139,8 +139,9 @@ export function mergeWorkItems(
         hasLocalChangesToUpload = true;
       } else {
         // Cloud mới hơn hoặc bằng -> Giữ cloud item, nhưng nếu local có base64 cho ảnh mà cloud không có thì giữ lại base64 để offline xem nét
+        let mergedImages = cItem.images || [];
         if (lItem.images && lItem.images.length > 0) {
-          const mergedImages = (cItem.images || []).map((cImg) => {
+          mergedImages = (cItem.images || []).map((cImg) => {
             const matchedLocalImg = lItem.images.find(
               (li) => li.id === cImg.id || (li.url && li.url === cImg.url)
             );
@@ -149,8 +150,17 @@ export function mergeWorkItems(
             }
             return cImg;
           });
-          itemMap.set(lItem.id, { ...cItem, images: mergedImages, syncedWithCloud: true });
         }
+        const mergedAttachments = (cItem.attachments && cItem.attachments.length > 0)
+          ? cItem.attachments
+          : (lItem.attachments || []);
+
+        itemMap.set(lItem.id, {
+          ...cItem,
+          images: mergedImages,
+          attachments: mergedAttachments,
+          syncedWithCloud: true,
+        });
       }
     }
   }
@@ -271,7 +281,7 @@ export async function testGasConnection(gasUrl: string): Promise<GasPingResponse
 }
 
 /**
- * Loại bỏ chuỗi base64 khỏi hình ảnh trước khi lưu lên Google Sheets
+ * Loại bỏ chuỗi base64 khỏi hình ảnh và tệp trước khi lưu lên Google Sheets
  * Tránh lỗi vượt quá 50.000 ký tự trên một ô tính và tăng tốc độ đồng bộ
  */
 export function cleanItemForCloud(item: WorkItem): any {
@@ -283,6 +293,15 @@ export function cleanItemForCloud(item: WorkItem): any {
       driveFileId: img.driveFileId || '',
       caption: img.caption || '',
       createdAt: img.createdAt || new Date().toISOString(),
+    })),
+    attachments: (item.attachments || []).map((att) => ({
+      id: att.id,
+      name: att.name,
+      size: att.size || 0,
+      type: att.type || 'document',
+      url: att.url,
+      driveFileId: att.driveFileId || '',
+      createdAt: att.createdAt || new Date().toISOString(),
     })),
   };
 }
@@ -341,6 +360,7 @@ export async function fetchItemsFromGas(
           location: it.location || '',
           description: it.description || '',
           images: Array.isArray(it.images) ? it.images : [],
+          attachments: Array.isArray(it.attachments) ? it.attachments : [],
           isHighlighted: Boolean(it.isHighlighted),
           createdAt: it.createdAt || new Date().toISOString(),
           updatedAt: it.updatedAt || new Date().toISOString(),
@@ -472,5 +492,46 @@ export async function uploadImageToDrive(
     return { success: false, error: data.error || 'Lỗi lưu ảnh vào Drive' };
   } catch (err: any) {
     return { success: false, error: err.message || 'Không thể upload ảnh lên Drive' };
+  }
+}
+
+/**
+ * Upload tệp văn bản / tài liệu (PDF, Word, Excel, PowerPoint...) lên Google Drive via Google Apps Script
+ */
+export async function uploadFileToDrive(
+  base64Data: string,
+  fileName: string,
+  category: string,
+  yearMonth: string,
+  gasUrl: string,
+  mimeType?: string
+): Promise<{ success: boolean; fileData?: any; error?: string }> {
+  if (!gasUrl) {
+    return { success: false, error: 'Chưa cấu hình URL Google Apps Script' };
+  }
+
+  try {
+    const res = await fetch(gasUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
+      body: JSON.stringify({
+        action: 'uploadFile',
+        base64: base64Data,
+        fileName,
+        category,
+        yearMonth,
+        mimeType,
+      }),
+    });
+
+    const data = await res.json();
+    if (data.success && data.data) {
+      return { success: true, fileData: data.data };
+    }
+    return { success: false, error: data.error || 'Lỗi lưu tệp vào Drive' };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Không thể upload tệp văn bản lên Drive' };
   }
 }

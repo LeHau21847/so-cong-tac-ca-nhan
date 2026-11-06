@@ -1,11 +1,12 @@
 // src/components/quick-capture/QuickCaptureModal.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Category, WorkImage, WorkItemType } from '../../types';
+import { Category, WorkAttachment, WorkImage, WorkItemType } from '../../types';
 import { CATEGORIES } from '../../utils/constants';
 import { compressImage, formatBytes, CompressedImageResult } from '../../utils/imageCompressor';
 import { getTodayDateString, getCurrentTimeString } from '../../utils/dateHelpers';
-import { uploadImageToDrive } from '../../services/storage';
+import { uploadImageToDrive, uploadFileToDrive } from '../../services/storage';
+import { formatFileSize, getFileTypeInfo, readFileAsBase64 } from '../../utils/fileHelpers';
 import {
   Camera,
   Image as ImageIcon,
@@ -18,6 +19,8 @@ import {
   Loader2,
   Trash2,
   Sparkles,
+  Paperclip,
+  FileText,
 } from 'lucide-react';
 
 export const QuickCaptureModal: React.FC = () => {
@@ -33,6 +36,7 @@ export const QuickCaptureModal: React.FC = () => {
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [category, setCategory] = useState<Category>('doan_thanh_nien');
   const [type, setType] = useState<WorkItemType>('completed_log');
@@ -43,8 +47,9 @@ export const QuickCaptureModal: React.FC = () => {
   const [description, setDescription] = useState('');
   const [isHighlighted, setIsHighlighted] = useState(false);
 
-  // Images state
+  // Images & Attachments state
   const [images, setImages] = useState<WorkImage[]>([]);
+  const [attachments, setAttachments] = useState<WorkAttachment[]>([]);
   const [isCompressing, setIsCompressing] = useState(false);
   const [compressionSummary, setCompressionSummary] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -83,6 +88,7 @@ export const QuickCaptureModal: React.FC = () => {
       if (quickCaptureInitialData.location) setLocation(quickCaptureInitialData.location);
       if (quickCaptureInitialData.description) setDescription(quickCaptureInitialData.description);
       if (quickCaptureInitialData.images) setImages(quickCaptureInitialData.images);
+      if (quickCaptureInitialData.attachments) setAttachments(quickCaptureInitialData.attachments);
       if (quickCaptureInitialData.isHighlighted !== undefined) setIsHighlighted(quickCaptureInitialData.isHighlighted);
     } else {
       // Default reset
@@ -94,6 +100,7 @@ export const QuickCaptureModal: React.FC = () => {
       setLocation('');
       setDescription('');
       setImages([]);
+      setAttachments([]);
       setIsHighlighted(false);
       setCompressionSummary(null);
     }
@@ -154,6 +161,42 @@ export const QuickCaptureModal: React.FC = () => {
     );
   };
 
+  // Handle document files selected (PDF, Word, Excel, PowerPoint, Text)
+  const handleDocumentsSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const newDocs: WorkAttachment[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.size > 25 * 1024 * 1024) {
+        showToast(`Tệp "${file.name}" vượt quá 25MB, vui lòng chọn tệp nhỏ hơn`, 'error');
+        continue;
+      }
+      try {
+        const base64 = await readFileAsBase64(file);
+        newDocs.push({
+          id: 'doc_' + Date.now() + '_' + i,
+          name: file.name,
+          size: file.size,
+          type: file.name.split('.').pop()?.toLowerCase() || 'document',
+          url: '',
+          base64,
+          createdAt: new Date().toISOString(),
+        });
+      } catch (err: any) {
+        showToast('Lỗi đọc tệp: ' + err.message, 'error');
+      }
+    }
+
+    setAttachments((prev) => [...prev, ...newDocs]);
+    e.target.value = '';
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -166,14 +209,14 @@ export const QuickCaptureModal: React.FC = () => {
 
       // Final images array to save
       let finalImages = [...images];
+      let finalAttachments = [...attachments];
 
-      // If Google Apps Script URL is set and we have images with base64, we can asynchronously upload to Google Drive
+      const yearMonth = date.substring(0, 7) || new Date().toISOString().substring(0, 7);
+
+      // If Google Apps Script URL is set and we have images with base64, asynchronously upload to Google Drive
       if (settings.gasApiUrl && images.some((img) => img.base64)) {
         showToast('Đang lưu công việc và tải ảnh lên Google Drive...', 'info');
 
-        const yearMonth = date.substring(0, 7) || new Date().toISOString().substring(0, 7);
-
-        // Upload images one by one to Google Drive
         const uploadedImages = await Promise.all(
           images.map(async (img, idx) => {
             if (img.base64) {
@@ -190,7 +233,6 @@ export const QuickCaptureModal: React.FC = () => {
                     ...img,
                     url: uploadRes.fileData.url || img.url,
                     driveFileId: uploadRes.fileData.fileId,
-                    // keep base64 as fallback for offline
                   };
                 }
               } catch (upErr) {
@@ -201,6 +243,39 @@ export const QuickCaptureModal: React.FC = () => {
           })
         );
         finalImages = uploadedImages;
+      }
+
+      // If Google Apps Script URL is set and we have documents with base64, upload documents to Google Drive 5TB
+      if (settings.gasApiUrl && attachments.some((att) => att.base64)) {
+        showToast('Đang tải tệp văn bản lên Google Drive 5TB...', 'info');
+
+        const uploadedAttachments = await Promise.all(
+          attachments.map(async (att) => {
+            if (att.base64) {
+              try {
+                const uploadRes = await uploadFileToDrive(
+                  att.base64,
+                  att.name,
+                  category,
+                  yearMonth,
+                  settings.gasApiUrl
+                );
+                if (uploadRes.success && uploadRes.fileData) {
+                  return {
+                    ...att,
+                    url: uploadRes.fileData.url || uploadRes.fileData.viewUrl || '',
+                    driveFileId: uploadRes.fileData.fileId,
+                    size: uploadRes.fileData.size || att.size,
+                  };
+                }
+              } catch (upErr) {
+                console.warn('Document upload error:', upErr);
+              }
+            }
+            return att;
+          })
+        );
+        finalAttachments = uploadedAttachments;
       }
 
       const isEditing = Boolean(quickCaptureInitialData && quickCaptureInitialData.id);
@@ -218,6 +293,7 @@ export const QuickCaptureModal: React.FC = () => {
           location,
           description,
           images: finalImages,
+          attachments: finalAttachments,
           isHighlighted,
           updatedAt: new Date().toISOString(),
         } as any);
@@ -232,6 +308,7 @@ export const QuickCaptureModal: React.FC = () => {
           location,
           description,
           images: finalImages,
+          attachments: finalAttachments,
           isHighlighted,
         });
       }
@@ -433,6 +510,73 @@ export const QuickCaptureModal: React.FC = () => {
                     />
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* TỆP VĂN BẢN & TÀI LIỆU ĐÍNH KÈM */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                <Paperclip className="w-3.5 h-3.5 text-blue-500" />
+                <span>Đính Kèm Tệp Văn Bản / Tài Liệu</span>
+              </label>
+              <span className="text-[11px] text-slate-400">PDF, Word, Excel, PowerPoint, Text</span>
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt"
+              multiple
+              onChange={handleDocumentsSelected}
+              className="hidden"
+            />
+
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full py-2.5 px-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center gap-2 font-semibold text-xs sm:text-sm active:scale-98 transition-all"
+            >
+              <Paperclip className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <span>Thêm tệp văn bản (Kế hoạch, Biên bản, Nghị quyết, Công văn...)</span>
+            </button>
+
+            {attachments.length > 0 && (
+              <div className="mt-2.5 space-y-2">
+                {attachments.map((att, idx) => {
+                  const typeInfo = getFileTypeInfo(att.name);
+                  return (
+                    <div
+                      key={att.id || idx}
+                      className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-2">
+                        <div
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-[10px] uppercase shrink-0 border ${typeInfo.badgeBg} ${typeInfo.badgeText} ${typeInfo.borderColor}`}
+                        >
+                          {typeInfo.label}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">
+                            {att.name}
+                          </p>
+                          <p className="text-[10px] text-slate-500">
+                            {formatFileSize(att.size)}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(idx)}
+                        className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors shrink-0"
+                        title="Xóa tệp"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

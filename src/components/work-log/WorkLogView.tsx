@@ -16,6 +16,7 @@ import {
   Image as ImageIcon,
   Plus,
   Search,
+  Paperclip,
 } from 'lucide-react';
 
 export const WorkLogView: React.FC = () => {
@@ -225,12 +226,26 @@ export const WorkLogView: React.FC = () => {
                       <Calendar className="w-3 h-3 text-blue-500" />
                       <span>{formatVNDate(item.date)}</span>
                     </div>
-                    {item.location && (
-                      <div className="flex items-center gap-1 max-w-[140px] truncate">
-                        <MapPin className="w-3 h-3 text-red-500 shrink-0" />
-                        <span className="truncate">{item.location}</span>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {item.attachments && item.attachments.length > 0 && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded-md" title={`${item.attachments.length} tệp đính kèm`}>
+                          <Paperclip className="w-3 h-3" />
+                          {item.attachments.length}
+                        </span>
+                      )}
+                      {item.images && item.images.length > 0 && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded-md" title={`${item.images.length} ảnh minh chứng`}>
+                          <ImageIcon className="w-3 h-3" />
+                          {item.images.length}
+                        </span>
+                      )}
+                      {item.location && (
+                        <div className="flex items-center gap-1 max-w-[110px] truncate">
+                          <MapPin className="w-3 h-3 text-red-500 shrink-0" />
+                          <span className="truncate">{item.location}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -249,7 +264,7 @@ export const WorkLogView: React.FC = () => {
                   <th className="py-3 px-3 w-36">Mảng</th>
                   <th className="py-3 px-4">Tên công việc / Nội dung</th>
                   <th className="py-3 px-3 w-36">Địa điểm</th>
-                  <th className="py-3 px-3 w-20 text-center">Ảnh</th>
+                  <th className="py-3 px-3 w-28 text-center">Ảnh / Tệp</th>
                   <th className="py-3 px-3 w-16 text-right">Chi tiết</th>
                 </tr>
               </thead>
@@ -295,14 +310,23 @@ export const WorkLogView: React.FC = () => {
                       {item.location || '-'}
                     </td>
                     <td className="py-3 px-3 text-center">
-                      {item.images && item.images.length > 0 ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 text-[11px] font-semibold">
-                          <ImageIcon className="w-3 h-3" />
-                          {item.images.length}
-                        </span>
-                      ) : (
-                        <span className="text-slate-300">-</span>
-                      )}
+                      <div className="flex items-center justify-center gap-1.5">
+                        {item.images && item.images.length > 0 && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 text-[10px] font-semibold" title={`${item.images.length} ảnh minh chứng`}>
+                            <ImageIcon className="w-3 h-3" />
+                            {item.images.length}
+                          </span>
+                        )}
+                        {item.attachments && item.attachments.length > 0 && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 text-[10px] font-semibold" title={`${item.attachments.length} tệp văn bản`}>
+                            <Paperclip className="w-3 h-3" />
+                            {item.attachments.length}
+                          </span>
+                        )}
+                        {(!item.images || item.images.length === 0) && (!item.attachments || item.attachments.length === 0) && (
+                          <span className="text-slate-300">-</span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-3 text-right">
                       <button className="text-blue-600 hover:text-blue-800 font-semibold text-xs">

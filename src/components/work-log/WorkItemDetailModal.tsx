@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { WorkItem } from '../../types';
 import { CategoryBadge } from '../common/CategoryBadge';
 import { formatVNDate } from '../../utils/dateHelpers';
+import { formatFileSize, getFileTypeInfo } from '../../utils/fileHelpers';
 import {
   X,
   Star,
@@ -15,6 +16,7 @@ import {
   ExternalLink,
   CheckCircle2,
   CalendarCheck,
+  Paperclip,
 } from 'lucide-react';
 
 interface WorkItemDetailModalProps {
@@ -154,6 +156,57 @@ export const WorkItemDetailModal: React.FC<WorkItemDetailModalProps> = ({
                     )}
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Document Attachments */}
+          {item.attachments && item.attachments.length > 0 && (
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
+                <Paperclip className="w-3.5 h-3.5 text-blue-500" />
+                <span>Tệp văn bản & Tài liệu đính kèm ({item.attachments.length})</span>
+              </h4>
+              <div className="space-y-2">
+                {item.attachments.map((att, idx) => {
+                  const typeInfo = getFileTypeInfo(att.name);
+                  return (
+                    <div
+                      key={att.id || idx}
+                      className="flex items-center justify-between p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1 mr-3">
+                        <div
+                          className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-xs uppercase shrink-0 border ${typeInfo.badgeBg} ${typeInfo.badgeText} ${typeInfo.borderColor}`}
+                        >
+                          {typeInfo.label}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">
+                            {att.name}
+                          </p>
+                          <p className="text-[11px] text-slate-500">
+                            {formatFileSize(att.size)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {att.url ? (
+                        <a
+                          href={att.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-colors shadow-2xs"
+                        >
+                          <span>Mở xem</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 italic">Đang lưu</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

@@ -1,6 +1,6 @@
 // src/context/AppContext.tsx
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { AppSettings, FilterState, SyncStatus, WorkImage, WorkItem } from '../types';
+import { AppSettings, FilterState, SyncStatus, WorkAttachment, WorkImage, WorkItem } from '../types';
 import {
   getStoredSettings,
   saveStoredSettings,
@@ -42,7 +42,12 @@ interface AppContextType {
   updateItem: (item: WorkItem) => Promise<void>;
   deleteItem: (id: string) => Promise<void>;
   toggleHighlight: (id: string) => Promise<void>;
-  completeScheduledItem: (id: string, resultDescription: string, newImages: WorkImage[]) => Promise<void>;
+  completeScheduledItem: (
+    id: string,
+    resultDescription: string,
+    newImages: WorkImage[],
+    newAttachments?: WorkAttachment[]
+  ) => Promise<void>;
   syncNow: () => Promise<void>;
   resetData: () => void;
   toast: { message: string; type: 'success' | 'error' | 'info' } | null;
@@ -345,7 +350,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const completeScheduledItem = async (
     id: string,
     resultDescription: string,
-    newImages: WorkImage[]
+    newImages: WorkImage[],
+    newAttachments: WorkAttachment[] = []
   ) => {
     const target = items.find((i) => i.id === id);
     if (!target) return;
@@ -360,6 +366,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       status: 'done',
       description: mergedDescription,
       images: [...(target.images || []), ...newImages],
+      attachments: [...(target.attachments || []), ...newAttachments],
       updatedAt: new Date().toISOString(),
     };
 

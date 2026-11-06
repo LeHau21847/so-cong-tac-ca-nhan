@@ -16,6 +16,17 @@ export interface WorkImage {
   thumbnailUrl?: string;
 }
 
+export interface WorkAttachment {
+  id: string;
+  name: string; // Tên tệp văn bản (vd: Ke_hoach_thang_11.pdf)
+  size: number; // Kích thước tệp (bytes)
+  type: string; // Loại tệp: pdf, word, excel, powerpoint, text, document
+  url: string; // Link xem hoặc tải trực tiếp từ Google Drive
+  driveFileId?: string; // File ID trên Google Drive
+  createdAt: string;
+  base64?: string; // Tạm thời dùng khi tải lên
+}
+
 export interface WorkItem {
   id: string;
   title: string;
@@ -27,6 +38,7 @@ export interface WorkItem {
   location?: string;
   description?: string;
   images: WorkImage[];
+  attachments?: WorkAttachment[]; // Danh sách tệp văn bản đính kèm
   isHighlighted: boolean; // Đánh dấu sao "Công việc tiêu biểu / Thành tích nổi bật"
   createdAt: string;
   updatedAt: string;
