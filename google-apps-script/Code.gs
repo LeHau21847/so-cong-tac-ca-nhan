@@ -239,6 +239,23 @@ function getDatabaseSheet() {
 }
 
 /**
+ * Loại bỏ chuỗi base64 khỏi ảnh trước khi lưu vào Google Sheets
+ * Tránh lỗi vượt quá giới hạn 50.000 ký tự trên một ô tính của Google Sheets!
+ */
+function sanitizeImages(images) {
+  if (!images || !Array.isArray(images)) return [];
+  return images.map(function(img) {
+    return {
+      id: img.id,
+      url: img.url,
+      driveFileId: img.driveFileId || "",
+      caption: img.caption || "",
+      createdAt: img.createdAt || new Date().toISOString()
+    };
+  });
+}
+
+/**
  * Lấy toàn bộ danh sách công việc
  */
 function getAllWorkItems() {
@@ -269,10 +286,10 @@ function getAllWorkItems() {
       type: String(row[3] || "completed_log"),
       status: String(row[4] || "done"),
       date: formatDateToISO(row[5]),
-      time: String(row[6] || ""),
+      time: formatTimeToString(row[6]),
       location: String(row[7] || ""),
       description: String(row[8] || ""),
-      images: images,
+      images: sanitizeImages(images),
       isHighlighted: Boolean(row[10]),
       createdAt: String(row[11] || ""),
       updatedAt: String(row[12] || "")
@@ -291,6 +308,22 @@ function formatDateToISO(val) {
     return Utilities.formatDate(val, "GMT+7", "yyyy-MM-dd");
   }
   return String(val);
+}
+
+/**
+ * Chuẩn hóa giờ thành định dạng HH:mm
+ */
+function formatTimeToString(val) {
+  if (!val) return "";
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, "GMT+7", "HH:mm");
+  }
+  var str = String(val);
+  if (str.indexOf("1899") !== -1 || str.indexOf("GMT") !== -1) {
+    var match = str.match(/\b(\d{2}:\d{2})(?::\d{2})?\b/);
+    if (match) return match[1];
+  }
+  return str;
 }
 
 /**
@@ -323,10 +356,10 @@ function saveOrUpdateWorkItem(item) {
     item.time || "",
     item.location || "",
     item.description || "",
-    JSON.stringify(item.images || []),
+    JSON.stringify(sanitizeImages(item.images || [])),
     item.isHighlighted ? true : false,
     item.createdAt || new Date().toISOString(),
-    new Date().toISOString()
+    item.updatedAt || new Date().toISOString()
   ];
 
   if (rowIndex > 0) {
@@ -357,9 +390,14 @@ function deleteWorkItemById(id) {
 }
 
 /**
- * Đồng bộ toàn bộ dữ liệu (ghi đè hoặc cập nhật)
+ * Đồng bộ toàn bộ dữ liệu (ghi đè hoặc cập nhật an toàn)
  */
 function syncAllItems(items) {
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    // Tuyệt đối không xóa bảng tính nếu danh sách truyền vào rỗng
+    return;
+  }
+
   var sheet = getDatabaseSheet();
   sheet.clearContents();
 
@@ -397,7 +435,7 @@ function syncAllItems(items) {
       it.time || "",
       it.location || "",
       it.description || "",
-      JSON.stringify(it.images || []),
+      JSON.stringify(sanitizeImages(it.images || [])),
       it.isHighlighted ? true : false,
       it.createdAt || new Date().toISOString(),
       it.updatedAt || new Date().toISOString()
@@ -406,4 +444,3 @@ function syncAllItems(items) {
 
   sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
 }
-

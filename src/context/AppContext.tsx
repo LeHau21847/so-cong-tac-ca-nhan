@@ -10,6 +10,10 @@ import {
   saveItemToGas,
   deleteItemFromGas,
   fetchItemsFromGas,
+  batchSyncToGas,
+  getDeletedItemIds,
+  recordDeletedItemId,
+  mergeWorkItems,
 } from '../services/storage';
 import { getTodayDateString } from '../utils/dateHelpers';
 
@@ -87,13 +91,93 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       document.documentElement.classList.remove('dark');
     }
 
-    // Check online status
+    // Tự động đồng bộ 2 chiều ngay khi mở ứng dụng (cả trên điện thoại và máy tính)
     if (settings.gasApiUrl) {
-      setSyncStatus('online');
+      performSync(true);
     } else {
       setSyncStatus('offline');
     }
-  }, []);
+
+    // Tự động đồng bộ lại khi người dùng quay lại tab hoặc mở lại ứng dụng
+    const handleFocus = () => {
+      if (settings.gasApiUrl) {
+        performSync(true);
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && settings.gasApiUrl) {
+        performSync(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Định kỳ tự động đồng bộ ngầm mỗi 45 giây nếu có mạng
+    const interval = setInterval(() => {
+      if (settings.gasApiUrl && navigator.onLine) {
+        performSync(true);
+      }
+    }, 45000);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(interval);
+    };
+  }, [settings.gasApiUrl]);
+
+  // Đồng bộ 2 chiều (Bidirectional Sync) thông minh giữa máy tính, điện thoại và Google Sheets
+  const performSync = async (isSilent = false) => {
+    if (!settings.gasApiUrl) {
+      if (!isSilent) {
+        showToast('Vui lòng gắn URL Google Apps Script trong Cài đặt trước', 'error');
+      }
+      setSyncStatus('offline');
+      return;
+    }
+
+    setSyncStatus('syncing');
+    if (!isSilent) {
+      showToast('Đang kết nối và đồng bộ dữ liệu...', 'info');
+    }
+
+    try {
+      const res = await fetchItemsFromGas(settings.gasApiUrl);
+      if (res.success && Array.isArray(res.items)) {
+        const currentLocal = getStoredWorkItems();
+        const deletedIds = getDeletedItemIds();
+        const { mergedItems, hasLocalChangesToUpload } = mergeWorkItems(currentLocal, res.items, deletedIds);
+
+        setItems(mergedItems);
+        saveStoredWorkItems(mergedItems);
+        setSyncStatus('online');
+
+        // Nếu máy này có công việc mới chưa có trên Cloud (ví dụ các việc đã nhập trên máy tính)
+        // -> Đẩy ngay danh sách đã gộp lên Google Sheets để điện thoại cũng nhận được
+        if (hasLocalChangesToUpload) {
+          console.log(`[Auto-Sync] Đang đồng bộ ${mergedItems.length} công việc lên Google Sheets...`);
+          await batchSyncToGas(mergedItems, settings.gasApiUrl);
+        }
+
+        updateSettings({ lastSync: new Date().toISOString() });
+        if (!isSilent) {
+          showToast(`Đã đồng bộ thành công! Hiện có ${mergedItems.length} công việc.`, 'success');
+        }
+      } else {
+        setSyncStatus('error');
+        if (!isSilent) {
+          showToast(res.error || 'Lỗi khi đồng bộ Google Sheets', 'error');
+        }
+      }
+    } catch (err: any) {
+      console.warn('Sync failed:', err);
+      setSyncStatus('error');
+      if (!isSilent) {
+        showToast('Lỗi mạng khi đồng bộ', 'error');
+      }
+    }
+  };
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ message, type });
@@ -187,6 +271,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Delete item
   const deleteItem = async (id: string) => {
+    recordDeletedItemId(id);
     const newItems = items.filter((i) => i.id !== id);
     setItems(newItems);
     saveStoredWorkItems(newItems);
@@ -247,31 +332,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Manual Full Sync with Google Sheets
   const syncNow = async () => {
-    if (!settings.gasApiUrl) {
-      showToast('Vui lòng gắn URL Google Apps Script trong Cài đặt trước', 'error');
-      return;
-    }
-    setSyncStatus('syncing');
-    showToast('Đang kết nối và đồng bộ với Google Sheets...', 'info');
-
-    try {
-      const res = await fetchItemsFromGas(settings.gasApiUrl);
-      if (res.success && res.items) {
-        if (res.items.length > 0) {
-          setItems(res.items);
-          saveStoredWorkItems(res.items);
-        }
-        setSyncStatus('online');
-        updateSettings({ lastSync: new Date().toISOString() });
-        showToast(`Đã đồng bộ thành công ${res.items.length} công việc!`, 'success');
-      } else {
-        setSyncStatus('error');
-        showToast(res.error || 'Lỗi khi đồng bộ Google Sheets', 'error');
-      }
-    } catch (err: any) {
-      setSyncStatus('error');
-      showToast('Lỗi mạng khi đồng bộ', 'error');
-    }
+    await performSync(false);
   };
 
   // Reset to empty clean state
